@@ -99,11 +99,7 @@ class CXRDemoModel:
         tensor = self._preprocess(image)
         self.model.zero_grad(set_to_none=True)
 
-        if self.model_type == "torchxrayvision":
-            features = self.model.features2(tensor)
-        else:
-            features = self.model.features(tensor)
-
+        features = self.model.features(tensor)
         features = features.clone()
         features.retain_grad()
 
