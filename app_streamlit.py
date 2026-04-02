@@ -104,7 +104,7 @@ class CXRDemoModel:
         activations.append(out)
         out.register_hook(lambda grad: gradients.append(grad))
 
-    handle_fwd = self.target_module.register_forward_hook(fwd_hook)
+        handle_fwd = self.target_module.register_forward_hook(fwd_hook)
 
         try:
             logits = self.model(tensor)
