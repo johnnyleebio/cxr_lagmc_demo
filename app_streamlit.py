@@ -167,8 +167,8 @@ def load_model() -> CXRDemoModel:
 
 
 st.set_page_config(page_title="Chest X-ray AI Demo", layout="wide")
-st.title("Chest X-ray AI Demo")
-st.caption("Upload a chest x-ray to generate top predicted findings and a Grad-CAM heatmap.")
+st.title("Chest XR AI Demo - LA General / USC")
+st.caption("Upload a chest XR to generate top predicted findings and a Grad-CAM heatmap.")
 st.warning("Educational demo only. Not for clinical use.")
 
 model = load_model()
