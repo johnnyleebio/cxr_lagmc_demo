@@ -96,25 +96,31 @@ class CXRDemoModel:
         return tensor.to(DEVICE)
 
     def predict_with_gradcam(self, image: Image.Image) -> Tuple[List[Prediction], np.ndarray, str]:
+        # Crop borders to reduce attention to markers / text / frame
+        arr = np.array(image)
+        h, w = arr.shape[:2]
+        arr = arr[int(0.1*h):int(0.9*h), int(0.1*w):int(0.9*w)]
+        image = Image.fromarray(arr)
+    
         tensor = self._preprocess(image)
         self.model.zero_grad(set_to_none=True)
-
+    
         features = self.model.features(tensor)
         features = features.clone()
         features.retain_grad()
-
+    
         out = F.relu(features, inplace=False)
         out = F.adaptive_avg_pool2d(out, (1, 1))
         out = torch.flatten(out, 1)
         logits = self.model.classifier(out)
-
+    
         probs = torch.sigmoid(logits).detach().cpu().numpy()[0]
         top_idx = np.argsort(probs)[::-1][:TOP_K]
         predictions = [Prediction(self.labels[i], float(probs[i])) for i in top_idx]
-
+    
         target_index = int(top_idx[0])
         logits[0, target_index].backward()
-
+    
         cam = self._build_gradcam(features, features.grad, image)
         note = self._model_note()
         return predictions, cam, note
