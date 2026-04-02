@@ -97,33 +97,31 @@ class CXRDemoModel:
 
     def predict_with_gradcam(self, image: Image.Image) -> Tuple[List[Prediction], np.ndarray, str]:
         tensor = self._preprocess(image)
-        activations = []
-        gradients = []
+        self.model.zero_grad(set_to_none=True)
 
-    def fwd_hook(_module, _inp, out):
-        activations.append(out)
-        out.register_hook(lambda grad: gradients.append(grad))
+        if self.model_type == "torchxrayvision":
+            features = self.model.features2(tensor)
+        else:
+            features = self.model.features(tensor)
 
-        handle_fwd = self.target_module.register_forward_hook(fwd_hook)
+        features = features.clone()
+        features.retain_grad()
 
-        try:
-            logits = self.model(tensor)
-            if isinstance(logits, dict):
-                logits = logits["logits"]
+        out = F.relu(features, inplace=False)
+        out = F.adaptive_avg_pool2d(out, (1, 1))
+        out = torch.flatten(out, 1)
+        logits = self.model.classifier(out)
 
-            probs = torch.sigmoid(logits).detach().cpu().numpy()[0]
-            top_idx = np.argsort(probs)[::-1][:TOP_K]
-            predictions = [Prediction(self.labels[i], float(probs[i])) for i in top_idx]
+        probs = torch.sigmoid(logits).detach().cpu().numpy()[0]
+        top_idx = np.argsort(probs)[::-1][:TOP_K]
+        predictions = [Prediction(self.labels[i], float(probs[i])) for i in top_idx]
 
-            target_index = int(top_idx[0])
-            self.model.zero_grad(set_to_none=True)
-            logits[0, target_index].backward()
+        target_index = int(top_idx[0])
+        logits[0, target_index].backward()
 
-            cam = self._build_gradcam(activations[0], gradients[0], image)
-            note = self._model_note()
-            return predictions, cam, note
-        finally:
-            handle_fwd.remove()
+        cam = self._build_gradcam(features, features.grad, image)
+        note = self._model_note()
+        return predictions, cam, note
 
     def _build_gradcam(self, activation: torch.Tensor, gradient: torch.Tensor, image: Image.Image) -> np.ndarray:
         weights = gradient.mean(dim=(2, 3), keepdim=True)
