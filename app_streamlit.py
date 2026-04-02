@@ -62,6 +62,9 @@ class CXRDemoModel:
             import torchxrayvision as xrv  # type: ignore
 
             model = xrv.models.DenseNet(weights="densenet121-res224-all")
+            for module in model.modules():
+                if isinstance(module, torch.nn.ReLU):
+                    module.inplace = False
             model = model.to(DEVICE).eval()
             self.labels = list(model.pathologies)
             self.model = model
@@ -97,14 +100,11 @@ class CXRDemoModel:
         activations = []
         gradients = []
 
-        def fwd_hook(_module, _inp, out):
-            activations.append(out)
+    def fwd_hook(_module, _inp, out):
+        activations.append(out)
+        out.register_hook(lambda grad: gradients.append(grad))
 
-        def bwd_hook(_module, _grad_in, grad_out):
-            gradients.append(grad_out[0])
-
-        handle_fwd = self.target_module.register_forward_hook(fwd_hook)
-        handle_bwd = self.target_module.register_full_backward_hook(bwd_hook)
+    handle_fwd = self.target_module.register_forward_hook(fwd_hook)
 
         try:
             logits = self.model(tensor)
@@ -124,7 +124,6 @@ class CXRDemoModel:
             return predictions, cam, note
         finally:
             handle_fwd.remove()
-            handle_bwd.remove()
 
     def _build_gradcam(self, activation: torch.Tensor, gradient: torch.Tensor, image: Image.Image) -> np.ndarray:
         weights = gradient.mean(dim=(2, 3), keepdim=True)
