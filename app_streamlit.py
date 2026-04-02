@@ -96,10 +96,11 @@ class CXRDemoModel:
         return tensor.to(DEVICE)
 
     def predict_with_gradcam(self, image: Image.Image) -> Tuple[List[Prediction], np.ndarray, str]:
-        # Crop borders to reduce attention to markers / text / frame
         arr = np.array(image)
         h, w = arr.shape[:2]
-        arr = arr[int(0.1*h):int(0.9*h), int(0.1*w):int(0.9*w)]
+    
+        # more aggressive top crop, lighter side crop
+        arr = arr[int(0.15*h):int(0.95*h), int(0.05*w):int(0.95*w)]
         image = Image.fromarray(arr)
     
         tensor = self._preprocess(image)
@@ -118,7 +119,11 @@ class CXRDemoModel:
         top_idx = np.argsort(probs)[::-1][:TOP_K]
         predictions = [Prediction(self.labels[i], float(probs[i])) for i in top_idx]
     
-        target_index = int(top_idx[0])
+        # for demo, optionally force a more focal class if present
+        preferred = ["Pneumothorax", "Effusion", "Consolidation", "Pneumonia"]
+        preferred_idx = next((i for i, lbl in enumerate(self.labels) if lbl in preferred), None)
+        target_index = preferred_idx if preferred_idx is not None else int(top_idx[0])
+    
         logits[0, target_index].backward()
     
         cam = self._build_gradcam(features, features.grad, image)
@@ -140,7 +145,7 @@ class CXRDemoModel:
         heatmap = np.uint8(255 * cam)
         heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
         heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-        overlay = cv2.addWeighted(base_arr, 0.6, heatmap, 0.4, 0)
+        overlay = cv2.addWeighted(base_arr, 0.8, heatmap, 0.2, 0)
         return overlay
 
     def _model_note(self) -> str:
